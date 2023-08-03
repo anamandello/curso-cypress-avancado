@@ -1,0 +1,35 @@
+{
+    "hits": [
+        {
+            "title": "Teste um",
+            "url": "https://www.cypress.io/",
+            "author": "Author 000",
+            "points": 0,
+            "num_comments": 85,
+            "objectID": 1
+        },
+        {
+            "title": "Teste dois",
+            "url": "https://profy.dev/article/cypress-react",
+            "author": "author 000",
+            "points": 85,
+            "num_comments": 34,
+            "objectID": 2
+        },
+        {
+            "title": "Exemplo três",
+            "url": "https://profy.dev/article/cypress-react",
+            "author": "Author 1",
+            "points": 89,
+            "num_comments": 38,
+            "objectID": 3
+        },
+        {
+            "title": "Exemplo quatro",
+            "url": "https://profy.dev/article/cypress-react",
+            "author": "Teste Author 2",
+            "points": 999,
+            "num_comments": 96,
+            "objectID": 4
+        }
+    ]}

@@ -1,142 +1,360 @@
 describe('Hacker Stories', () => {
-  beforeEach(() => {
-    cy.visit('/')
+  const initialTerm = 'React'
+  const newTerm = 'Cypress'
 
-    cy.assertLoadingIsShownAndHidden()
-    cy.contains('More').should('be.visible')
-  })
+  context('Hitting the real API', () => {
+    beforeEach(() => {
+      cy.intercept({
+        method: 'GET',
+        pathname: '**/search',
+        query: {
+          query: initialTerm,
+          page: '0'
+        }
+      }).as('getStories')
 
-  it('shows the footer', () => {
-    cy.get('footer')
-      .should('be.visible')
-      .and('contain', 'Icons made by Freepik from www.flaticon.com')
-  })
+      cy.visit('/')
+      cy.wait('@getStories')
 
-  context('List of stories', () => {
-    // Since the API is external,
-    // I can't control what it will provide to the frontend,
-    // and so, how can I assert on the data?
-    // This is why this test is being skipped.
-    // TODO: Find a way to test it out.
-    it.skip('shows the right data for all rendered stories', () => {})
-
+    })
+    
     it('shows 20 stories, then the next 20 after clicking "More"', () => {
+      cy.intercept({
+        method: 'GET',
+        pathname: '**/search',
+        query: {
+          query: initialTerm,
+          page: '1'
+        }
+      }).as('getNextStories')
+  
       cy.get('.item').should('have.length', 20)
-
-      cy.contains('More').click()
-
-      cy.assertLoadingIsShownAndHidden()
-
+  
+      cy.contains('More')
+        .should('be.visible')
+        .click()
+  
+      cy.wait('@getNextStories')
+  
       cy.get('.item').should('have.length', 40)
     })
 
-    it('shows only nineteen stories after dimissing the first story', () => {
-      cy.get('.button-small')
-        .first()
-        .click()
+    it('searches via the last searched term', () => {
+      cy.intercept({
+        method: 'GET',
+        pathname: '**/search',
+        query: {
+          query: newTerm,
+          page: '0'
+        }
+      }).as('getNewTermStories')
 
-      cy.get('.item').should('have.length', 19)
-    })
-
-    // Since the API is external,
-    // I can't control what it will provide to the frontend,
-    // and so, how can I test ordering?
-    // This is why these tests are being skipped.
-    // TODO: Find a way to test them out.
-    context.skip('Order by', () => {
-      it('orders by title', () => {})
-
-      it('orders by author', () => {})
-
-      it('orders by comments', () => {})
-
-      it('orders by points', () => {})
-    })
-
-    // Hrm, how would I simulate such errors?
-    // Since I still don't know, the tests are being skipped.
-    // TODO: Find a way to test them out.
-    context.skip('Errors', () => {
-      it('shows "Something went wrong ..." in case of a server error', () => {})
-
-      it('shows "Something went wrong ..." in case of a network error', () => {})
-    })
-  })
-
-  context('Search', () => {
-    const initialTerm = 'React'
-    const newTerm = 'Cypress'
-
-    beforeEach(() => {
       cy.get('#search')
+        .should('be.visible')
         .clear()
-    })
-
-    it('types and hits ENTER', () => {
-      cy.get('#search')
         .type(`${newTerm}{enter}`)
 
-      cy.assertLoadingIsShownAndHidden()
+      cy.wait('@getNewTermStories')
 
-      cy.get('.item').should('have.length', 20)
-      cy.get('.item')
-        .first()
-        .should('contain', newTerm)
+      cy.getLocalStorage('search').should('be.equal', newTerm)
+
       cy.get(`button:contains(${initialTerm})`)
         .should('be.visible')
-    })
-
-    it('types and clicks the submit button', () => {
-      cy.get('#search')
-        .type(newTerm)
-      cy.contains('Submit')
         .click()
 
-      cy.assertLoadingIsShownAndHidden()
+      cy.wait('@getStories')
+
+      cy.getLocalStorage('search').should('be.equal', initialTerm)
 
       cy.get('.item').should('have.length', 20)
       cy.get('.item')
         .first()
-        .should('contain', newTerm)
-      cy.get(`button:contains(${initialTerm})`)
+        .should('be.visible')
+        .should('contain', initialTerm)
+      cy.get(`button:contains(${newTerm})`)
         .should('be.visible')
     })
+    
+  })
 
-    context('Last searches', () => {
-      it('searches via the last searched term', () => {
+  context('Mocking the API', () => {
+    context('Footer and list of stories', () => {
+      beforeEach(() => {
+        cy.intercept(
+          'GET', 
+          `**/search?query=${initialTerm}&page=0`, 
+          {fixture: 'stories'}
+        ).as('getStories')
+        
+        cy.visit('/')
+        cy.wait('@getStories')
+      })
+  
+      it('shows the footer', () => {
+        cy.get('footer')
+          .should('be.visible')
+          .and('contain', 'Icons made by Freepik from www.flaticon.com')
+      })
+    
+      context('List of stories', () => {
+        // Since the API is external,
+        // I can't control what it will provide to the frontend,
+        // and so, how can I assert on the data?
+        // This is why this test is being skipped.
+        // TODO: Find a way to test it out.
+        it('shows the right data for all rendered stories', () => {
+          cy.fixture('stories').then((stories) => {
+            cy.get('.item').each( (item, index) => {
+                cy.wrap(item).should('contain', stories.hits[index].title)
+                .and('contain', stories.hits[index].author)
+                .and('contain', stories.hits[index].num_comments)
+                .and('contain', stories.hits[index].points)
+
+                cy.get(`a:contains(${stories.hits[index].title})`)
+                .should('have.attr', 'href', stories.hits[index].url)
+            })
+          })
+        })
+    
+        it('shows one less story after dimissing the first story', () => {
+          cy.get('.button-small')
+            .first()
+            .should('be.visible')
+            .click()
+    
+          cy.get('.item').should('have.length', 3)
+        })
+    
+        // Since the API is external,
+        // I can't control what it will provide to the frontend,
+        // and so, how can I test ordering?
+        // This is why these tests are being skipped.
+        // TODO: Find a way to test them out.
+        context('Order by', () => {
+          const stories = require('./../fixtures/stories.json')
+
+          it('orders by title', () => {
+            stories.hits.sort(function(a, b) {
+              if(a.title < b.title) {
+                return -1;
+              } else {
+                return true;
+              }
+            });
+
+            cy.get("button:contains(Title)").should('be.visible').click()
+
+            cy.get('.item').each( (item, index) => {
+              cy.wrap(item).should('contain', stories.hits[index].title)
+                .and('contain', stories.hits[index].author)
+                .and('contain', stories.hits[index].num_comments)
+                .and('contain', stories.hits[index].points)
+            })
+          })
+    
+          it('orders by author', () => {
+            stories.hits.sort(function(a, b) {
+              if(a.author < b.author) {
+                return -1;
+              } else {
+                return true;
+              }
+            });
+
+            cy.get("button:contains(Author)").should('be.visible').click()
+
+            cy.get('.item').each( (item, index) => {
+              cy.wrap(item).should('contain', stories.hits[index].title)
+                .and('contain', stories.hits[index].author)
+                .and('contain', stories.hits[index].num_comments)
+                .and('contain', stories.hits[index].points)
+            })
+          })
+    
+          it('orders by comments', () => {
+            stories.hits.sort(function(a, b) {
+              if(a.num_comments > b.num_comments) {
+                return -1;
+              } else {
+                return true;
+              }
+            });
+
+            cy.get("button:contains(Comments)").should('be.visible').click()
+
+            cy.get('.item').each( (item, index) => {
+              cy.wrap(item).should('contain', stories.hits[index].title)
+                .and('contain', stories.hits[index].author)
+                .and('contain', stories.hits[index].num_comments)
+                .and('contain', stories.hits[index].points)
+            })
+          })
+    
+          it('orders by points', () => {
+            stories.hits.sort(function(a, b) {
+              if(a.points > b.points) {
+                return -1;
+              } else {
+                return true;
+              }
+            });
+
+            cy.get("button:contains(Points)").should('be.visible').click()
+
+            cy.get('.item').each( (item, index) => {
+              cy.wrap(item).should('contain', stories.hits[index].title)
+                .and('contain', stories.hits[index].author)
+                .and('contain', stories.hits[index].num_comments)
+                .and('contain', stories.hits[index].points)
+            })
+          })
+        })    
+      })
+
+    })
+
+    context('Search', () => { 
+      beforeEach(() => {
+        cy.intercept(
+          'GET', 
+          `**/search?query=${initialTerm}&page=0`, 
+          {fixture: 'empty'}
+        ).as('getEmptyStories')
+
+        cy.intercept(
+          'GET', 
+          `**/search?query=${newTerm}&page=0`, 
+          {fixture: 'stories'}
+        ).as('getStories')
+
+        cy.visit('/')
+        cy.wait('@getEmptyStories')
+
         cy.get('#search')
+          .should('be.visible')
+          .clear()
+      })
+  
+      it('types and hits ENTER', () => {
+        cy.get('#search')
+          .should('be.visible')
           .type(`${newTerm}{enter}`)
+  
+        cy.wait('@getStories')
 
-        cy.assertLoadingIsShownAndHidden()
-
+        cy.getLocalStorage('search').should('be.equal', newTerm)
+  
+        cy.get('.item').should('have.length', 4)
         cy.get(`button:contains(${initialTerm})`)
           .should('be.visible')
+      })
+  
+      it('types and clicks the submit button', () => {
+        cy.get('#search')
+          .type(newTerm)
+        cy.contains('Submit')
+          .should('be.visible')
           .click()
+  
+        cy.wait('@getStories')
 
-        cy.assertLoadingIsShownAndHidden()
-
-        cy.get('.item').should('have.length', 20)
-        cy.get('.item')
-          .first()
-          .should('contain', initialTerm)
-        cy.get(`button:contains(${newTerm})`)
+        cy.getLocalStorage('search').should('be.equal', newTerm)
+  
+        cy.get('.item').should('have.length', 4)
+        cy.get(`button:contains(${initialTerm})`)
           .should('be.visible')
       })
+  
+      // it('types and submits the form directly', () => {
+      //  cy.get('form input[type="text"]')
+      //    .should('be.visible')
+      //    .clear()
+      //    .type(newTerm)
+      //  cy.get('form').submit()
+    
+      //  cy.wait('@getStories')
+  
+      //   cy.get('.item')
+      //     .first()
+      //     .should('contain', newTerm)
+      // })
 
-      it('shows a max of 5 buttons for the last searched terms', () => {
-        const faker = require('faker')
+      it('shows no story when none is returned', () => {
+        cy.get('.item').should('not.exist')
+      })
+  
+      context('Last searches', () => {
+        it('shows a max of 5 buttons for the last searched terms', () => {
+          const faker = require('faker')
 
-        Cypress._.times(6, () => {
-          cy.get('#search')
-            .clear()
-            .type(`${faker.random.word()}{enter}`)
+          cy.intercept(
+           'GET',
+           '**/search**',
+           { fixture: 'empty' }
+         ).as('getRandomStories')
+
+          Cypress._.times(6, () => {
+            const randomWord = faker.random.word()
+            cy.get('#search')
+              .clear()
+              .type(`${randomWord}{enter}`)
+
+            cy.wait('@getRandomStories')
+            cy.getLocalStorage('search').should('be.equal', randomWord)
+          })
+
+          cy.get('.last-searches')
+            .within(() => {
+              cy.get('button')
+                .should('have.length', 5)
+            })
+
         })
-
-        cy.assertLoadingIsShownAndHidden()
-
-        cy.get('.last-searches button')
-          .should('have.length', 5)
       })
     })
+  })  
+})
+
+context('Errors', () => {
+  const errorMsg = 'Something went wrong ...'
+
+  it('shows "Something went wrong ..." in case of a server error', () => {
+    cy.intercept('GET', '**/search**',
+    { statusCode: 500 }
+    ).as('getServerFailure')
+
+    cy.visit('/')
+    cy.wait('@getServerFailure')
+
+    cy.contains(errorMsg).should('be.visible')
   })
+
+  it('shows "Something went wrong ..." in case of a network error', () => {
+    cy.intercept('GET', '**/search**',
+    { forceNetworkError: true }
+    ).as('getNetworkFailure')
+
+    cy.visit('/')
+
+    cy.contains(errorMsg).should('be.visible')
+  })
+})
+
+it('shows a "Loading ..." state before showing the results', () => {
+  cy.intercept(
+    'GET', 
+    '**/search**', 
+    {
+      delay: 1000,
+      fixture: 'stories'
+    }
+  ).as('getDelayedStories')
+  
+  cy.visit('/')
+
+  cy.assertLoadingIsShownAndHidden()
+
+  cy.wait('@getDelayedStories')
+
+  cy.get('.item').should('have.length', 4)
 })
